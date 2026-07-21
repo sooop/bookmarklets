@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>BOOKMARKLET LOADER — 설치</title>
+<style>
+  :root{
+    --bg: #0B0D12;
+    --panel: #14171F;
+    --panel-alt: #1B1F2A;
+    --border: #262B38;
+    --text: #E4E7EE;
+    --text-dim: #8B93A7;
+    --mono: 'JetBrains Mono', 'SF Mono', Consolas, 'Courier New', monospace;
+    --green: #34D399;
+    --amber: #FBBF24;
+    --violet: #A78BFA;
+  }
+  *{ box-sizing: border-box; }
+  html, body{
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--mono);
+    min-height: 100vh;
+  }
+  body{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 20px;
+  }
+  .page{ width: 100%; max-width: 560px; }
+  .kicker{
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  h1{ font-size: 26px; margin: 0 0 8px 0; letter-spacing: -0.01em; }
+  .lede{
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.7;
+    margin: 0 0 28px 0;
+  }
+  .lede code{
+    color: var(--text);
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 12px;
+  }
+
+  section{ margin-bottom: 22px; }
+  h2{
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin: 0 0 12px 0;
+  }
+
+  .card{
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 22px;
+  }
+
+  .presets{ display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .preset-chip{
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: border-color .12s ease, color .12s ease;
+  }
+  .preset-chip:hover{ border-color: var(--violet); color: var(--text); }
+
+  .field{ margin-bottom: 14px; }
+  .field:last-child{ margin-bottom: 0; }
+  .field label{
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    letter-spacing: .04em;
+  }
+  .field input[type="text"]{
+    width: 100%;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
+  .field input[type="text"]:focus{ outline: none; border-color: var(--violet); }
+  .field-row{ display: flex; gap: 10px; }
+  .field-row .field{ flex: 1; min-width: 0; }
+
+  .seg{
+    display: flex;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 3px;
+  }
+  .seg button{
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 11.5px;
+    cursor: pointer;
+    transition: background .12s ease, color .12s ease;
+  }
+  .seg button.active{
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+
+  .subfield{
+    margin-top: 10px;
+    display: none;
+  }
+  .subfield.show{ display: block; }
+
+  .preview{
+    margin-top: 16px;
+    background: #0F1219;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .preview-label{
+    font-size: 10px;
+    letter-spacing: .1em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .preview-copy{
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-family: var(--mono);
+    font-size: 10.5px;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .preview-copy:hover{ color: var(--text); }
+  .preview-url{
+    font-size: 12px;
+    color: var(--text);
+    word-break: break-all;
+    line-height: 1.6;
+  }
+  .preview-note{
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .setup-status{ margin-top: 8px; font-size: 11px; color: var(--text-dim); }
+  .setup-status.warn{ color: var(--amber); }
+  .setup-status.ok{ color: var(--green); }
+
+  .relay-wrap{
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    margin-bottom: 22px;
+  }
+  .relay{
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    text-decoration: none;
+    color: var(--text);
+    cursor: grab;
+    transition: border-color .15s ease, transform .15s ease;
+  }
+  .relay:hover{ border-color: #3A4257; transform: translateY(-1px); }
+  .relay:active{ cursor: grabbing; }
+  .relay.relay-disabled{ opacity: .4; cursor: not-allowed; }
+  .relay-leds{ display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+  .led{ width: 9px; height: 9px; border-radius: 50%; }
+  .led.green{ background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .led.amber{ background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+  .led.violet{ background: var(--violet); box-shadow: 0 0 8px var(--violet); }
+  .relay-text{ flex: 1; }
+  .relay-title{ font-size: 15px; font-weight: 600; margin-bottom: 3px; }
+  .relay-sub{ font-size: 11px; color: var(--text-dim); word-break: break-all; }
+  .relay-hint{
+    font-size: 11px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    padding: 4px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+  .relay-caption{
+    text-align: center;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 14px;
+  }
+
+  ol{ margin: 0; padding: 0; list-style: none; counter-reset: step; }
+  ol li{
+    counter-increment: step;
+    display: flex;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  ol li:last-child{ border-bottom: none; }
+  ol li::before{
+    content: counter(step);
+    flex-shrink: 0;
+    width: 20px; height: 20px;
+    border-radius: 5px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .notes{
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+    font-size: 12.5px;
+    line-height: 1.8;
+    color: var(--text-dim);
+  }
+  .notes strong{ color: var(--text); font-weight: 600; }
+  .notes ul{ margin: 8px 0 0 0; padding-left: 18px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="kicker">Bookmarklet</div>
+  <h1>BOOKMARKLET LOADER</h1>
+  <p class="lede">
+    GitHub 등에 호스팅한 <code>.js</code> 파일을 매번 새로 불러와 실행하는 작은 로더 북마클릿을 만듭니다.
+    <code>env-switch.js</code>, <code>admin-grid-export.js</code>, <code>slick-grid-export.js</code>
+    등 어떤 도구든 저장소 정보만 바꿔서 같은 방식으로 설치할 수 있습니다.
+  </p>
+
+  <section>
+    <h2>1. 저장소 · 파일 정보</h2>
+    <div class="card">
+      <div class="presets">
+        <span class="preset-chip" data-preset="env-switch.js">ENV SWITCH</span>
+        <span class="preset-chip" data-preset="admin-grid-export.js">Admin Grid Export</span>
+        <span class="preset-chip" data-preset="slick-grid-export.js">SlickGrid Export</span>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <label for="f-github-id">GitHub 계정</label>
+          <input type="text" id="f-github-id" spellcheck="false" autocomplete="off" placeholder="soo" value="sooop">
+        </div>
+        <div class="field">
+          <label for="f-repo-name">저장소 이름</label>
+          <input type="text" id="f-repo-name" spellcheck="false" autocomplete="off" placeholder="bookmarklets" value="bookmarklets">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="f-branch">브랜치</label>
+          <input type="text" id="f-branch" spellcheck="false" autocomplete="off" placeholder="main" value="main">
+        </div>
+        <div class="field">
+          <label for="f-file-name">파일 경로</label>
+          <input type="text" id="f-file-name" spellcheck="false" autocomplete="off" placeholder="env-switch.js">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>2. URL 설정</h2>
+    <div class="card">
+      <div class="field">
+        <label>URL 유형</label>
+        <div class="seg" id="url-type-seg">
+          <button type="button" data-value="jsdelivr">jsDelivr</button>
+          <button type="button" data-value="raw">raw.githubusercontent.com</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>캐시 파라미터</label>
+        <div class="seg" id="cache-type-seg">
+          <button type="button" data-value="timestamp">타임스탬프 (자동, 매번 새로 불러옴)</button>
+          <button type="button" data-value="version">버전 (직접 입력)</button>
+        </div>
+        <div class="subfield" id="version-subfield">
+          <input type="text" id="f-version" spellcheck="false" autocomplete="off" placeholder="예: 3, 2026-07-22, v1.2.0">
+        </div>
+      </div>
+
+      <div class="preview">
+        <div class="preview-label">
+          <span>생성된 스크립트 URL</span>
+          <button type="button" class="preview-copy" id="preview-copy-btn">복사</button>
+        </div>
+        <div class="preview-url" id="preview-url">—</div>
+        <div class="preview-note" id="preview-note"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="relay-wrap">
+    <a class="relay relay-disabled" id="bookmarklet-link" href="#" draggable="false">
+      <span class="relay-leds">
+        <span class="led green"></span>
+        <span class="led amber"></span>
+        <span class="led violet"></span>
+      </span>
+      <span class="relay-text">
+        <span class="relay-title" id="relay-title">BOOKMARKLET LOADER</span>
+        <span class="relay-sub" id="relay-sub">위 정보를 입력하면 활성화됩니다</span>
+      </span>
+      <span class="relay-hint">드래그 → 북마크바</span>
+    </a>
+    <div class="relay-caption" id="setup-status">필수 항목을 입력해 주세요</div>
+  </div>
+
+  <section>
+    <h2>3. 북마클릿 설치</h2>
+    <ol>
+      <li>북마크바가 보이지 않으면 먼저 표시합니다 (Ctrl/Cmd + Shift + B).</li>
+      <li>모든 항목을 입력하면 위 버튼이 활성화됩니다.</li>
+      <li>활성화된 버튼을 북마크바로 드래그합니다. 드래그가 안 되면 북마크바를 우클릭 → 페이지 추가 → URL 칸에 이 버튼의 링크 주소를 붙여넣습니다.</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>4. 동작 방식</h2>
+    <div class="notes">
+      <strong>동적 로딩 구조</strong>
+      <ul>
+        <li>북마클릿 자체는 <code>&lt;script src="..."&gt;</code>를 삽입하는 로더 코드뿐입니다 (수백 바이트 수준). 실제 로직은 클릭할 때마다 지정한 URL에서 새로 불러옵니다.</li>
+        <li>저장소는 반드시 공개(public)여야 인증 없이 파일을 불러올 수 있습니다.</li>
+      </ul>
+      <strong>URL 유형</strong>
+      <ul>
+        <li><b>jsDelivr</b>: <code>https://cdn.jsdelivr.net/gh/{계정}/{저장소}@{브랜치}/{파일}</code> — CDN을 거치며 콘텐츠 타입이 안정적입니다.</li>
+        <li><b>raw.githubusercontent.com</b>: <code>https://raw.githubusercontent.com/{계정}/{저장소}/{브랜치}/{파일}</code> — GitHub에서 직접 서빙하며, jsDelivr의 CDN 캐시 지연 없이 커밋 직후 바로 반영됩니다.</li>
+      </ul>
+      <strong>캐시 파라미터</strong>
+      <ul>
+        <li><b>타임스탬프</b>: 로더가 실행될 때마다 <code>&t=현재시각</code>을 자동으로 붙여, 매번 확실히 최신 파일을 불러옵니다.</li>
+        <li><b>버전</b>: 입력한 값을 <code>&v=값</code>으로 URL에 고정합니다. 파일을 갱신할 때마다 이 값을 바꿔주면 캐시를 우회할 수 있고, 값을 바꾸지 않으면 캐시된 버전이 계속 재사용됩니다.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  var STORAGE_KEY = 'esw_installer_v2';
+  var els = {
+    githubId: document.getElementById('f-github-id'),
+    repoName: document.getElementById('f-repo-name'),
+    branch: document.getElementById('f-branch'),
+    fileName: document.getElementById('f-file-name'),
+    version: document.getElementById('f-version'),
+    versionField: document.getElementById('version-subfield'),
+    urlTypeSeg: document.getElementById('url-type-seg'),
+    cacheTypeSeg: document.getElementById('cache-type-seg'),
+    previewUrl: document.getElementById('preview-url'),
+    previewNote: document.getElementById('preview-note'),
+    previewCopyBtn: document.getElementById('preview-copy-btn'),
+    link: document.getElementById('bookmarklet-link'),
+    relayTitle: document.getElementById('relay-title'),
+    relaySub: document.getElementById('relay-sub'),
+    status: document.getElementById('setup-status')
+  };
+
+  var state = {
+    urlType: 'jsdelivr',
+    cacheType: 'timestamp'
+  };
+
+  var DEFAULTS = {
+    githubId: 'sooop',
+    repoName: 'bookmarklets',
+    branch: 'main'
+  };
+
+  function loadState() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      if (!saved) return;
+      els.githubId.value = saved.githubId || DEFAULTS.githubId;
+      els.repoName.value = saved.repoName || DEFAULTS.repoName;
+      els.branch.value = saved.branch || DEFAULTS.branch;
+      els.fileName.value = saved.fileName || '';
+      els.version.value = saved.version || '';
+      state.urlType = saved.urlType === 'raw' ? 'raw' : 'jsdelivr';
+      state.cacheType = saved.cacheType === 'version' ? 'version' : 'timestamp';
+    } catch (e) {}
+  }
+
+  function saveState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        githubId: els.githubId.value.trim(),
+        repoName: els.repoName.value.trim(),
+        branch: els.branch.value.trim(),
+        fileName: els.fileName.value.trim(),
+        version: els.version.value.trim(),
+        urlType: state.urlType,
+        cacheType: state.cacheType
+      }));
+    } catch (e) {}
+  }
+
+  function setSeg(container, value) {
+    var btns = container.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('active', btns[i].getAttribute('data-value') === value);
+    }
+  }
+
+  function buildBaseUrl() {
+    var id = els.githubId.value.trim();
+    var repo = els.repoName.value.trim();
+    var branch = els.branch.value.trim() || 'main';
+    var file = els.fileName.value.trim().replace(/^\/+/, '');
+    if (!id || !repo || !file) return null;
+
+    var base = state.urlType === 'raw'
+      ? 'https://raw.githubusercontent.com/' + id + '/' + repo + '/' + branch + '/' + file
+      : 'https://cdn.jsdelivr.net/gh/' + id + '/' + repo + '@' + branch + '/' + file;
+
+    if (state.cacheType === 'version') {
+      var v = els.version.value.trim();
+      if (!v) return null;
+      base += '?v=' + encodeURIComponent(v);
+    }
+    return base;
+  }
+
+  function buildLoaderHref(url, dynamicTimestamp) {
+    var safeUrl = JSON.stringify(url);
+    var srcExpr = dynamicTimestamp
+      ? 'u+(u.indexOf("?")>-1?"&":"?")+"t="+Date.now()'
+      : 'u';
+    var loaderSrc =
+      '(function(){' +
+      'var d=document,id="bkm-loader-9f2b";' +
+      'var o=d.getElementById(id);if(o){o.remove();}' +
+      'var s=d.createElement("script");' +
+      's.id=id;' +
+      'var u=' + safeUrl + ';' +
+      's.src=' + srcExpr + ';' +
+      's.onerror=function(){' +
+        'var m=d.createElement("div");' +
+        'm.textContent="스크립트 로드 실패: "+u;' +
+        'm.style.cssText="position:fixed;left:50%;bottom:32px;transform:translateX(-50%);' +
+          'background:#14171F;color:#E4E7EE;border:1px solid #262B38;padding:10px 16px;' +
+          'border-radius:9px;font-family:monospace;font-size:12.5px;z-index:2147483647;";' +
+        'd.body.appendChild(m);' +
+        'setTimeout(function(){m.remove();},3000);' +
+      '};' +
+      'd.body.appendChild(s);' +
+      '})();';
+    return 'javascript:' + encodeURIComponent(loaderSrc);
+  }
+
+  function refresh() {
+    setSeg(els.urlTypeSeg, state.urlType);
+    setSeg(els.cacheTypeSeg, state.cacheType);
+    els.versionField.classList.toggle('show', state.cacheType === 'version');
+
+    var baseUrl = buildBaseUrl();
+    saveState();
+
+    if (!baseUrl) {
+      els.previewUrl.textContent = '—';
+      els.previewNote.textContent = '';
+      els.link.setAttribute('href', '#');
+      els.link.setAttribute('draggable', 'false');
+      els.link.classList.add('relay-disabled');
+      els.relayTitle.textContent = 'BOOKMARKLET LOADER';
+      els.relaySub.textContent = '위 정보를 입력하면 활성화됩니다';
+      els.status.textContent = '필수 항목을 입력해 주세요 (GitHub 계정 / 저장소 / 파일 경로'
+        + (state.cacheType === 'version' ? ' / 버전' : '') + ')';
+      els.status.className = 'relay-caption';
+      return;
+    }
+
+    els.previewUrl.textContent = baseUrl;
+    els.previewNote.textContent = state.cacheType === 'timestamp'
+      ? '실행할 때마다 &t=<현재시각> 이 자동으로 덧붙습니다.'
+      : '';
+
+    var href = buildLoaderHref(baseUrl, state.cacheType === 'timestamp');
+    els.link.setAttribute('href', href);
+    els.link.setAttribute('draggable', 'true');
+    els.link.classList.remove('relay-disabled');
+
+    var fileName = els.fileName.value.trim();
+    els.relayTitle.textContent = fileName || 'BOOKMARKLET LOADER';
+    els.relaySub.textContent = baseUrl;
+    els.status.textContent = '북마클릿이 활성화되었습니다. 버튼을 북마크바로 드래그하세요.';
+    els.status.className = 'relay-caption';
+  }
+
+  els.previewCopyBtn.addEventListener('click', function(){
+    var text = els.previewUrl.textContent;
+    if (!text || text === '—') return;
+    var done = function(){
+      var original = els.previewCopyBtn.textContent;
+      els.previewCopyBtn.textContent = '복사됨';
+      setTimeout(function(){ els.previewCopyBtn.textContent = original; }, 1200);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function(){});
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+  });
+
+  document.querySelectorAll('.preset-chip').forEach(function(chip){
+    chip.addEventListener('click', function(){
+      els.fileName.value = chip.getAttribute('data-preset');
+      refresh();
+    });
+  });
+
+  els.urlTypeSeg.querySelectorAll('button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      state.urlType = btn.getAttribute('data-value');
+      refresh();
+    });
+  });
+  els.cacheTypeSeg.querySelectorAll('button').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      state.cacheType = btn.getAttribute('data-value');
+      refresh();
+    });
+  });
+
+  [els.githubId, els.repoName, els.branch, els.fileName, els.version].forEach(function(input){
+    input.addEventListener('input', refresh);
+  });
+
+  loadState();
+  refresh();
+})();
+</script>
+</body>
+</html>
