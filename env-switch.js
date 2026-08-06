@@ -46,11 +46,7 @@
   var host = loc.hostname;
   var isTracx = /(^|\.)tracxlogis\.com$/.test(host);
   var isQx = /(^|\.)qxpress\.net$/.test(host);
-
-  if (!isTracx && !isQx) {
-    showToast('tracxlogis.com 또는 qxpress.net 도메인에서만 동작합니다.\n현재 도메인: ' + host);
-    return;
-  }
+  var isAllowedDomain = isTracx || isQx;
 
   var STORAGE_KEY = '__esw_last_sub__';
   var DEFAULT_SUB = 'smartship2';
@@ -94,10 +90,10 @@
   var vmPortMatches = (String(loc.port || '') === String(vmConfig.port || ''));
   var vmIsCurrent = isVM && vmPortMatches;
 
-  var restPath = loc.pathname + loc.search + loc.hash;
+  var restPath = isAllowedDomain ? (loc.pathname + loc.search + loc.hash) : '/main';
   var protocol = loc.protocol;
-  var currentEnv = stagingMatch ? 'Staging' : (isVM ? 'VM' : 'Production');
-  var currentColor = stagingMatch ? '#FBBF24' : (isVM ? '#A78BFA' : '#34D399');
+  var currentEnv = stagingMatch ? 'Staging' : (isVM ? 'VM' : (isAllowedDomain ? 'Production' : 'External'));
+  var currentColor = stagingMatch ? '#FBBF24' : (isVM ? '#A78BFA' : (isAllowedDomain ? '#34D399' : '#8B93A7'));
 
   function navigateTo(targetHost, targetPort) {
     var portPart = targetPort ? (':' + targetPort) : '';
@@ -330,6 +326,14 @@
     saveVmConfig();
     updateVmDisplay();
   });
+
+  function onVmInputEnter(e) {
+    if (e.key !== 'Enter') { return; }
+    e.preventDefault();
+    pick('vm');
+  }
+  vmSubInput.addEventListener('keydown', onVmInputEnter);
+  vmPortInput.addEventListener('keydown', onVmInputEnter);
 
   d.addEventListener('keydown', onKeydown, true);
 })();
