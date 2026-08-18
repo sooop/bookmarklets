@@ -183,6 +183,25 @@
   .setup-status.warn{ color: var(--amber); }
   .setup-status.ok{ color: var(--green); }
 
+  .preview-note-text{
+    margin: 0 0 12px 0;
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .preview-run-btn{
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 14px;
+    cursor: pointer;
+    transition: border-color .12s ease;
+  }
+  .preview-run-btn:hover{ border-color: var(--violet); }
+
   .relay-wrap{
     background: var(--panel);
     border: 1px solid var(--border);
@@ -343,6 +362,21 @@
     </div>
   </section>
 
+  <section>
+    <h2>로컬 미리보기</h2>
+    <div class="card">
+      <p class="preview-note-text">
+        GitHub에 올리기 전, 이 페이지를 정적 서버로 띄운 채(<code>python -m http.server</code>)
+        같은 폴더의 <code>.js</code> 파일을 이 페이지 위에서 바로 실행해 동작을 확인합니다.
+        위 "파일 경로"에 입력된 값을 그대로 사용합니다.
+        도메인 가드가 있는 도구(Admin/SlickGrid Export)는 tracxlogis.com이 아니므로
+        안내 후 종료되는 게 정상입니다.
+      </p>
+      <button type="button" class="preview-run-btn" id="preview-run-btn">이 페이지에서 실행</button>
+      <div class="setup-status" id="preview-run-status"></div>
+    </div>
+  </section>
+
   <div class="relay-wrap">
     <a class="relay relay-disabled" id="bookmarklet-link" href="#" draggable="false">
       <span class="relay-leds">
@@ -405,6 +439,8 @@
     previewUrl: document.getElementById('preview-url'),
     previewNote: document.getElementById('preview-note'),
     previewCopyBtn: document.getElementById('preview-copy-btn'),
+    previewRunBtn: document.getElementById('preview-run-btn'),
+    previewRunStatus: document.getElementById('preview-run-status'),
     link: document.getElementById('bookmarklet-link'),
     relayTitle: document.getElementById('relay-title'),
     relaySub: document.getElementById('relay-sub'),
@@ -562,6 +598,31 @@
       try { document.execCommand('copy'); done(); } catch (e) {}
       document.body.removeChild(ta);
     }
+  });
+
+  els.previewRunBtn.addEventListener('click', function(){
+    var file = els.fileName.value.trim().replace(/^\/+/, '');
+    if (!file) {
+      els.previewRunStatus.textContent = '먼저 파일 경로를 입력하거나 위에서 프리셋을 선택하세요.';
+      els.previewRunStatus.className = 'setup-status warn';
+      return;
+    }
+    var id = 'installer-preview-script';
+    var old = document.getElementById(id);
+    if (old) old.remove();
+    var s = document.createElement('script');
+    s.id = id;
+    s.src = file + (file.indexOf('?') > -1 ? '&' : '?') + 't=' + Date.now();
+    s.onerror = function(){
+      els.previewRunStatus.textContent = '로드 실패: ' + file
+        + ' — 이 페이지를 정적 서버(예: python -m http.server)로 열었는지, 같은 폴더에 파일이 있는지 확인하세요.';
+      els.previewRunStatus.className = 'setup-status warn';
+    };
+    s.onload = function(){
+      els.previewRunStatus.textContent = file + ' 실행됨 (' + new Date().toLocaleTimeString() + ')';
+      els.previewRunStatus.className = 'setup-status ok';
+    };
+    document.body.appendChild(s);
   });
 
   document.querySelectorAll('.preset-chip').forEach(function(chip){
