@@ -333,7 +333,25 @@
     pick('vm');
   }
   vmSubInput.addEventListener('keydown', onVmInputEnter);
-  vmPortInput.addEventListener('keydown', onVmInputEnter);
+
+  function onVmPortKeydown(e) {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      var delta = (e.key === 'ArrowUp') ? 1 : -1;
+      var current = parseInt(vmPortInput.value, 10);
+      if (isNaN(current)) { current = parseInt(DEFAULT_VM_PORT, 10); }
+      var next = current + delta;
+      if (next < 0) { next = 0; }
+      if (next > 65535) { next = 65535; }
+      vmPortInput.value = String(next);
+      vmConfig.port = String(next);
+      saveVmConfig();
+      updateVmDisplay();
+      return;
+    }
+    onVmInputEnter(e);
+  }
+  vmPortInput.addEventListener('keydown', onVmPortKeydown);
 
   d.addEventListener('keydown', onKeydown, true);
 })();
