@@ -58,7 +58,7 @@ raw.githubusercontent.com은 즉시 반영되고, jsDelivr는 CDN 캐시 지연�
 | 파일 | 하는 일 |
 |---|---|
 | `installer.html` | 로더 북마클릿 생성기. 다른 도구를 설치하는 진입점. localStorage에 입력값 유지 |
-| `env-switch.js` | 현재 호스트명에서 서브도메인을 파싱해 Production / `staging-*` / 로컬 VM 사이를 경로 유지한 채 전환. P/S/V 단축키. VM 서브도메인·포트는 편집·저장 가능 |
+| `env-switch.js` | 현재 호스트명에서 서브도메인을 파싱해 Production / `staging-*` / VM 사이를 경로 유지한 채 전환. P/S/V 단축키. VM 판정은 학습값 > 규칙(3차 도메인 `-.*` 접미, 포트 유무) 순. 서비스별 Staging/VM 도메인 대응은 처음 한 번 질문해 `Domain=.<도메인>` 쿠키(+localStorage 폴백)에 저장. Shadow DOM 오버레이 |
 | `qr-code.js` | 현재 URL을 QR로 표시. URL 길이에 따라 QR 픽셀 크기를 단계적으로 키움. 외부 API `api.qrserver.com` 의존 |
 | `admin-grid-export.js` | **DHTMLX** 그리드 추출기. `window`를 순회해 `getColumnCount`/`cells`/`getRowsNum`/`getRowId`를 가진 객체를 찾음. 화면에서 직접 그리드를 클릭해 고르는 오버레이 제공. admin/qlps/tlsp/qwms 서브도메인 전용 |
 | `slick-grid-export.js` | **SlickGrid** 추출기. `window.SlickGridFactory`를 iframe 3단계까지 재귀 탐색. 컬럼 formatter를 적용해 렌더된 값을 추출 |
