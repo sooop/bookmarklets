@@ -9,7 +9,8 @@
  * VM 판정 규칙 (tracxlogis.com / qxpress.net, staging- 제외) — 하나라도 맞으면 VM
  *   1) 3차 도메인에 '-.*' 접미가 붙음 (sooop-dev, sooop-react, youk6121-dev, x-smartship ...)
  *   2) 포트가 붙어 있음 (Production/Staging 은 포트 없이 서비스됨)
- *   3) 3차 도메인이 저장된 VM 서브도메인과 같음 (규칙에 안 걸리는 포트 없는 레거시 VM)
+ *   3) 3차 도메인이 설정의 VM 서브도메인과 같음 (규칙에 안 걸리는 포트 없는 레거시 VM)
+ * 설정 화면(⚙)에서 VM 이동 주소(서브도메인·도메인·포트·프로토콜)를 지정한다. VM 에서 나갈 때는 서비스를 매번 묻는다.
  * 판정과 무관하게 Production / Staging / VM 버튼은 항상 클릭할 수 있다.
  */
 (function envSwitchBookmarklet(){
@@ -93,6 +94,13 @@
   // ───────── 설정 저장소 ─────────
   // localStorage 는 origin(호스트+포트)별로 분리되어 서브도메인 간에 공유되지 않으므로,
   // 도메인 전체에서 공유되는 쿠키(Domain=.tracxlogis.com / .qxpress.net)를 주 저장소로 쓰고 localStorage 는 폴백으로 둔다.
+  //
+  // 저장 구조(단일 출처): { vm, last, stg, prod }
+  //   vm   : VM 이동에 쓰는 유일한 값 { sub, domain, port('' = 포트 없음), proto }
+  //   stg  : 서비스별 Staging 3차 도메인 { 'qlps-admin.tracxlogis.com': 'staging-admin' }
+  //   prod : 사용자가 'Production 이다'라고 지정한 호스트 키 (자동 VM 규칙보다 우선)
+  //   last : 마지막으로 본 Production/Staging 서비스 (VM → 이동 시 후보)
+  // VM 은 매번 다른 서비스를 띄울 수 있으므로 VM ↔ 서비스 대응은 저장하지 않는다.
   var CFG_KEY = '__esw_cfg__';
   var LEGACY_VM_KEY = '__esw_vm_config__';
   var LEGACY_LAST_KEY = '__esw_last_sub__';
@@ -104,13 +112,9 @@
   var cookieDomain = '.' + hostMatch[2];
 
   var vmConfig = { sub: DEFAULT_VM_SUB, port: DEFAULT_VM_PORT, proto: 'https:', domain: DEFAULT_DOMAIN };
-  var lastEnv = null;  // 마지막으로 본 Production/Staging 의 { sub, domain }
-
-  // 학습된 도메인 대응 — 키는 Production 의 '<3차도메인>.<도메인>' (서비스 단위)
-  //   learnedMap['qlps-admin.tracxlogis.com'] = { s: 'staging-admin', v: { sub, port, proto } }
-  //   s: 그 서비스의 Staging 3차 도메인 전체 이름 / v: 그 서비스의 VM
-  // learnedProd: 사용자가 'Production 이다'라고 지정한 호스트 키 (자동 규칙보다 우선)
-  var learnedMap = {};
+  var vmPortMemo = DEFAULT_VM_PORT;  // '포트 없음'을 껐다 켤 때 되살릴 직전 포트
+  var lastEnv = null;
+  var stgMap = {};
   var learnedProd = [];
   var LABEL_RE = /^[a-z0-9-]+$/;
   var KEY_RE = /^[a-z0-9-]+\.(tracxlogis\.com|qxpress\.net)$/;
@@ -127,31 +131,31 @@
   function applyCfg(cfg) {
     if (!cfg) { return; }
     var vm = cfg.vm || cfg;  // 레거시 키는 { sub, port } 평면 구조
-    if (vm && typeof vm.sub === 'string' && /^[a-z0-9-]+$/.test(vm.sub)) { vmConfig.sub = vm.sub; }
+    if (vm && typeof vm.sub === 'string' && LABEL_RE.test(vm.sub)) { vmConfig.sub = vm.sub; }
     if (vm && typeof vm.port === 'string' && /^[0-9]{0,5}$/.test(vm.port)) { vmConfig.port = vm.port; }  // '' = 포트 없음
     if (vm && (vm.proto === 'https:' || vm.proto === 'http:')) { vmConfig.proto = vm.proto; }
     if (vm && DOMAINS.indexOf(vm.domain) >= 0) { vmConfig.domain = vm.domain; }
     var last = cfg.last;
-    if (last && typeof last.sub === 'string' && /^[a-z0-9-]+$/.test(last.sub) && DOMAINS.indexOf(last.domain) >= 0) {
+    if (last && typeof last.sub === 'string' && LABEL_RE.test(last.sub) && DOMAINS.indexOf(last.domain) >= 0) {
       lastEnv = { sub: last.sub, domain: last.domain };
-    }
-    if (cfg.map && typeof cfg.map === 'object') {
-      var nm = {};
-      Object.keys(cfg.map).forEach(function(k){
-        var e = cfg.map[k];
-        if (!KEY_RE.test(k) || !e || typeof e !== 'object') { return; }
-        var ne = {};
-        if (typeof e.s === 'string' && LABEL_RE.test(e.s)) { ne.s = e.s; }
-        if (e.v && typeof e.v.sub === 'string' && LABEL_RE.test(e.v.sub) &&
-            typeof e.v.port === 'string' && /^[0-9]{0,5}$/.test(e.v.port)) {
-          ne.v = { sub: e.v.sub, port: e.v.port, proto: e.v.proto === 'http:' ? 'http:' : 'https:' };
-        }
-        if (ne.s || ne.v) { nm[k] = ne; }
-      });
-      learnedMap = nm;
     }
     if (Array.isArray(cfg.prod)) {
       learnedProd = cfg.prod.filter(function(k){ return typeof k === 'string' && KEY_RE.test(k); });
+    }
+    if (cfg.stg && typeof cfg.stg === 'object') {
+      var ns = {};
+      Object.keys(cfg.stg).forEach(function(k){
+        if (KEY_RE.test(k) && typeof cfg.stg[k] === 'string' && LABEL_RE.test(cfg.stg[k])) { ns[k] = cfg.stg[k]; }
+      });
+      stgMap = ns;
+    } else if (cfg.map && typeof cfg.map === 'object') {
+      // 이전 버전(서비스별 { s, v } 학습 항목) 이관: Staging 대응만 가져온다. VM 대응은 버린다.
+      Object.keys(cfg.map).forEach(function(k){
+        var e = cfg.map[k];
+        if (!KEY_RE.test(k) || !e || typeof e.s !== 'string' || !LABEL_RE.test(e.s)) { return; }
+        stgMap[k] = e.s;
+        if (learnedProd.indexOf(k) < 0) { learnedProd.push(k); }
+      });
     }
   }
   // 우선순위: 레거시 localStorage < 신규 localStorage < 쿠키
@@ -161,9 +165,10 @@
     applyCfg(readJson(function(){ return localStorage.getItem(CFG_KEY); }));
   } catch (e) {}
   applyCfg(readCookieCfg());
+  if (vmConfig.port) { vmPortMemo = vmConfig.port; }
 
   function saveCfg() {
-    var json = JSON.stringify({ vm: vmConfig, last: lastEnv, map: learnedMap, prod: learnedProd });
+    var json = JSON.stringify({ vm: vmConfig, last: lastEnv, stg: stgMap, prod: learnedProd });
     try { localStorage.setItem(CFG_KEY, json); } catch (e) {}
     // 쿠키는 항목당 4KB 한도 — 넘으면 쿠키 저장은 건너뛴다 (localStorage 에만 남음)
     if (encodeURIComponent(json).length > 3800) { return; }
@@ -179,59 +184,39 @@
   var hostDomain = hostMatch[2];
   var hostKey = hostSub ? (hostSub + '.' + hostDomain) : '';
   var hostLabelFull = host.slice(0, host.length - hostDomain.length - 1);  // 'staging-x' 또는 'sooop-dev'
+  var hostPort = String(loc.port || '');
 
-  // 학습 데이터 조회
-  function mapKeySub(k) { return k.slice(0, k.indexOf('.')); }
-  function mapKeyDomain(k) { return k.slice(k.indexOf('.') + 1); }
-  function findFamilyByStaging(label, domain) {
-    var ks = Object.keys(learnedMap);
-    for (var i = 0; i < ks.length; i++) {
-      if (mapKeyDomain(ks[i]) === domain && learnedMap[ks[i]].s === label) { return { sub: mapKeySub(ks[i]), domain: domain }; }
-    }
-    return null;
-  }
-  function findFamilyByVm(sub, domain) {
-    var ks = Object.keys(learnedMap);
-    for (var i = 0; i < ks.length; i++) {
-      var v = learnedMap[ks[i]].v;
-      if (mapKeyDomain(ks[i]) === domain && v && v.sub === sub) { return { sub: mapKeySub(ks[i]), domain: domain }; }
-    }
-    return null;
-  }
   function famKey(f) { return f.sub + '.' + f.domain; }
-  function famEntry(f) { return learnedMap[famKey(f)] || null; }
-  function ensureEntry(f) {
-    var k = famKey(f);
-    if (!learnedMap[k]) { learnedMap[k] = {}; }
-    return learnedMap[k];
+  function findFamilyByStaging(label, domain) {
+    var ks = Object.keys(stgMap);
+    for (var i = 0; i < ks.length; i++) {
+      var dot = ks[i].indexOf('.');
+      if (ks[i].slice(dot + 1) === domain && stgMap[ks[i]] === label) { return { sub: ks[i].slice(0, dot), domain: domain }; }
+    }
+    return null;
   }
 
-  // Production 으로 확정된 호스트: 사용자가 지정했거나, 어떤 서비스의 Production 키로 학습돼 있음
-  var forcedProd = !!hostSub && (learnedProd.indexOf(hostKey) >= 0 || !!learnedMap[hostKey]);
-  // 규칙(하이픈·포트)은 학습된 Production 에는 적용하지 않는다
-  var vmByRule = !!hostSub && !forcedProd && (/-./.test(hostSub) || !!loc.port);
-
-  if (vmByRule && (hostSub !== vmConfig.sub || hostDomain !== vmConfig.domain ||
-      String(loc.port || '') !== String(vmConfig.port) || loc.protocol !== vmConfig.proto)) {
-    // 현재 접속 중인 호스트를 기준으로 VM 기본값 갱신 (포트 없는 VM 이면 포트도 빈 값)
-    vmConfig.sub = hostSub;
-    vmConfig.domain = hostDomain;
-    vmConfig.port = String(loc.port || '');
-    vmConfig.proto = loc.protocol === 'http:' ? 'http:' : 'https:';
-    saveCfg();
+  // Production 으로 확정된 호스트: 사용자가 지정했거나, Staging 대응이 등록돼 있음
+  function isForcedProd() {
+    return !!hostSub && (learnedProd.indexOf(hostKey) >= 0 || !!stgMap[hostKey]);
   }
-
-  // 판정 우선순위: 학습(Production 확정 → 학습된 VM) → 규칙 → 저장된 VM 기본값
+  // 판정 우선순위: Production 확정 → 규칙(하이픈 접미·포트) → 저장된 VM 설정과 일치
   function evalIsVM() {
-    if (!hostSub) { return false; }
-    if (learnedProd.indexOf(hostKey) >= 0 || learnedMap[hostKey]) { return false; }
-    if (findFamilyByVm(hostSub, hostDomain)) { return true; }
-    return vmByRule || (hostSub === vmConfig.sub && hostDomain === vmConfig.domain);
+    if (!hostSub || isForcedProd()) { return false; }
+    return /-./.test(hostSub) || !!hostPort || (hostSub === vmConfig.sub && hostDomain === vmConfig.domain);
   }
   var isVM = evalIsVM();
 
+  // 설정된 VM 과 현재 주소가 정확히 같은가 (서브도메인·도메인·포트)
+  function isConfiguredVm() {
+    return isVM && hostSub === vmConfig.sub && hostDomain === vmConfig.domain && hostPort === String(vmConfig.port);
+  }
+  function vmUrl() {
+    return vmConfig.proto + '//' + vmConfig.sub + '.' + vmConfig.domain + (vmConfig.port ? ':' + vmConfig.port : '');
+  }
+
   if (!isVM) {
-    // Production/Staging 에서는 현재 서브도메인을 기억해 둔다 (VM 역매핑 질문의 후보로 사용)
+    // Production/Staging 에서는 현재 서비스를 기억해 둔다 (VM 에서 이동할 때 후보로 사용)
     var curSub = stagingMatch ? stagingMatch[1] : hostSub;
     var curDomain = stagingMatch ? stagingMatch[2] : hostDomain;
     if (!lastEnv || lastEnv.sub !== curSub || lastEnv.domain !== curDomain) {
@@ -241,14 +226,14 @@
   }
 
   // 현재 페이지가 속한 서비스(Production 3차 도메인)를 질문 없이 알 수 있으면 반환, 모르면 null
-  //  - Staging: 학습된 역매핑 → 없으면 'staging-' 만 떼어 추정
-  //  - VM: 학습된 역매핑 → 없으면 null (질문 필요)
+  //  - Staging: 등록된 대응 → 없으면 'staging-' 만 떼어 추정
+  //  - VM: 항상 null (VM 은 매번 다른 서비스일 수 있어 이동 때마다 묻는다)
   //  - Production: 현재 호스트
   function peekFamily() {
     if (stagingMatch) {
       return findFamilyByStaging(hostLabelFull, hostDomain) || { sub: stagingMatch[1], domain: stagingMatch[2] };
     }
-    if (isVM) { return findFamilyByVm(hostSub, hostDomain); }
+    if (isVM) { return null; }
     return { sub: hostSub, domain: hostDomain };
   }
 
@@ -267,7 +252,8 @@
   var shadow = hostEl.attachShadow({ mode: 'open' });
   var dropStyle = null;
   var overlay = null;
-  var promptState = null;  // 질문 화면이 열려 있을 때 { cands, onChoose, showPort }
+  var promptState = null;  // 질문 화면이 열려 있을 때 { cands, onChoose }
+  var settingsOpen = false;
   var panelEl = null;
 
   function closeModal() {
@@ -285,20 +271,19 @@
     closeModal();
   }
 
-  // 서비스를 모르면(역매핑 없는 VM) 후보를 보여 주고 묻는다. 고른 값은 기억한다.
+  // VM 에서는 서비스를 알 수 없으므로 현재 경로를 보여 주며 묻는다. 답은 기억하지 않는다.
   function withFamily(cb) {
     var f = peekFamily();
     if (f) { cb(f); return; }
     var stripped = hostSub.indexOf('-') > 0 ? hostSub.slice(0, hostSub.lastIndexOf('-')) : '';
     openPrompt({
-      title: 'VM(' + hostSub + ')이 속한 Production 서브도메인은?',
-      hint: '처음 한 번만 묻고 기억합니다.',
-      cands: [stripped, lastEnv && lastEnv.sub, DEFAULT_SUB],
+      title: '이 화면(' + loc.pathname + ')은 어느 서비스인가요?',
+      hint: 'VM(' + host + (hostPort ? ':' + hostPort : '') + ')이 띄운 서비스의 Production 3차 도메인을 고르세요. VM 은 매번 다른 서비스일 수 있어 기억하지 않습니다.',
+      cands: [lastEnv && lastEnv.sub, stripped, DEFAULT_SUB],
       onChoose: function(sub) {
         var fam = { sub: sub, domain: hostDomain };
-        ensureEntry(fam).v = { sub: hostSub, port: String(loc.port || ''), proto: loc.protocol === 'http:' ? 'http:' : 'https:' };
+        lastEnv = fam;
         saveCfg();
-        refresh();
         cb(fam);
       }
     });
@@ -308,50 +293,33 @@
     var firstDash = f.sub.indexOf('-');
     openPrompt({
       title: f.sub + ' 의 Staging 도메인은?',
-      hint: '처음 한 번만 묻고 기억합니다.',
+      hint: '처음 한 번만 묻고 기억합니다. (설정에서 수정·삭제할 수 있습니다)',
       cands: ['staging-' + f.sub, firstDash > 0 ? 'staging-' + f.sub.slice(firstDash + 1) : ''],
       onChoose: function(label) {
-        ensureEntry(f).s = label;
+        stgMap[famKey(f)] = label;
         saveCfg();
         go(keepProto(), label, f.domain, '');
       }
     });
   }
 
-  function askVm(f) {
-    openPrompt({
-      title: f.sub + ' 의 VM 도메인은?',
-      hint: '처음 한 번만 묻고 기억합니다. 포트를 비우면 포트 없이 이동합니다.',
-      cands: [vmConfig.sub, f.sub + '-dev', f.sub],
-      showPort: true,
-      port: vmConfig.port,
-      onChoose: function(sub, port) {
-        var v = { sub: sub, port: port, proto: vmConfig.proto };
-        ensureEntry(f).v = v;
-        vmConfig.sub = sub;
-        vmConfig.port = port;
-        vmConfig.domain = f.domain;
-        saveCfg();
-        go(v.proto, sub, f.domain, port);
-      }
-    });
-  }
-
   function pick(target) {
-    if (promptState) { return; }
+    if (promptState || settingsOpen) { return; }
     // 이미 해당 환경이면 새로고침 (판정이 틀려도 버튼은 항상 동작한다)
     if (target === 'production' && !stagingMatch && !isVM) { location.reload(); return; }
     if (target === 'staging' && stagingMatch) { location.reload(); return; }
-    if (target === 'vm' && isVM) { location.reload(); return; }
+    if (target === 'vm') {
+      if (isConfiguredVm()) { location.reload(); } else { go(vmConfig.proto, vmConfig.sub, vmConfig.domain, vmConfig.port); }
+      return;
+    }
 
     withFamily(function(f) {
-      var entry = famEntry(f);
       if (target === 'production') {
         go(keepProto(), f.sub, f.domain, '');
-      } else if (target === 'staging') {
-        if (entry && entry.s) { go(keepProto(), entry.s, f.domain, ''); } else { askStaging(f); }
-      } else if (target === 'vm') {
-        if (entry && entry.v) { go(entry.v.proto, entry.v.sub, f.domain, entry.v.port); } else { askVm(f); }
+      } else if (stgMap[famKey(f)]) {
+        go(keepProto(), stgMap[famKey(f)], f.domain, '');
+      } else {
+        askStaging(f);
       }
     });
   }
@@ -373,6 +341,11 @@
       else if (dm && promptState.cands[+dm[1] - 1]) {
         e.preventDefault(); e.stopPropagation(); chooseFromPrompt(promptState.cands[+dm[1] - 1]);
       }
+      return;
+    }
+    if (settingsOpen) {
+      // 설정 화면: Esc = 메인으로. P/S/V 단축키는 비활성
+      if (e.code === 'Escape') { e.preventDefault(); e.stopPropagation(); showSettings(false); }
       return;
     }
     // e.code 는 한글 IME 상태에서도 물리 키 기준으로 들어온다 (e.key 는 'ㅔ' / 'Process')
@@ -425,21 +398,9 @@
     '#esw-overlay-9f2b .esw-led-violet{background:#A78BFA;box-shadow:0 0 6px #A78BFA;}' +
     '#esw-overlay-9f2b .esw-footer{padding:10px 18px;border-top:1px solid #262B38;' +
     'font-size:10.5px;color:#8B93A7;word-break:break-all;}' +
-    '#esw-overlay-9f2b .esw-vm-row{display:flex;gap:8px;align-items:stretch;}' +
-    '#esw-overlay-9f2b .esw-vm-row .esw-switch{width:auto;flex:1;min-width:0;}' +
-    '#esw-overlay-9f2b .esw-edit-btn{flex-shrink:0;width:36px;background:#1B1F2A;' +
-    'border:1px solid #262B38;border-radius:9px;color:#8B93A7;cursor:pointer;' +
-    'display:flex;align-items:center;justify-content:center;transition:border-color .12s ease,color .12s ease;}' +
-    '#esw-overlay-9f2b .esw-edit-btn:hover{border-color:#3A4257;color:#E4E7EE;}' +
-    '#esw-overlay-9f2b .esw-edit-btn.esw-active{color:#A78BFA;border-color:#A78BFA;}' +
     '#esw-overlay-9f2b .esw-mini-btn{background:#1B1F2A;border:1px solid #262B38;border-radius:6px;' +
     'padding:6px 8px;color:#A78BFA;font-family:inherit;font-size:11px;cursor:pointer;}' +
     '#esw-overlay-9f2b .esw-mini-btn:hover{border-color:#A78BFA;}' +
-    '#esw-overlay-9f2b .esw-use-current{flex:1 0 100%;}' +
-    '#esw-overlay-9f2b .esw-proto-btn{flex:1 0 100%;color:#E4E7EE;}' +
-    '#esw-overlay-9f2b .esw-vm-settings{display:none;flex-wrap:wrap;gap:8px;margin-top:8px;' +
-    'padding:10px;background:#0F1219;border:1px solid #262B38;border-radius:9px;}' +
-    '#esw-overlay-9f2b .esw-vm-settings.esw-open{display:flex;}' +
     '#esw-overlay-9f2b .esw-field{flex:1;display:flex;flex-direction:column;gap:5px;min-width:0;}' +
     '#esw-overlay-9f2b .esw-field span{font-size:10px;color:#8B93A7;letter-spacing:.05em;}' +
     '#esw-overlay-9f2b .esw-field.esw-field-port{flex:0 0 70px;}' +
@@ -457,6 +418,17 @@
     '#esw-overlay-9f2b .esw-prompt-row{display:flex;gap:8px;align-items:stretch;}' +
     '#esw-overlay-9f2b .esw-prompt-row .esw-input{flex:1;}' +
     '#esw-overlay-9f2b .esw-danger{color:#FBBF24;}' +
+    '#esw-overlay-9f2b .esw-settings{display:flex;flex-direction:column;gap:8px;}' +
+    '#esw-overlay-9f2b .esw-section{font-size:10px;letter-spacing:.1em;color:#8B93A7;margin-top:6px;}' +
+    '#esw-overlay-9f2b .esw-row{display:flex;gap:8px;align-items:flex-end;}' +
+    '#esw-overlay-9f2b .esw-row .esw-field{flex:1;}' +
+    '#esw-overlay-9f2b .esw-row .esw-field.esw-field-port{flex:0 0 96px;}' +
+    '#esw-overlay-9f2b .esw-input:disabled{opacity:.35;}' +
+    '#esw-overlay-9f2b .esw-wide{width:100%;}' +
+    '#esw-overlay-9f2b .esw-preview{font-size:11px;color:#A78BFA;word-break:break-all;padding:2px 0;}' +
+    '#esw-overlay-9f2b .esw-map-row{display:flex;gap:8px;align-items:center;font-size:11px;}' +
+    '#esw-overlay-9f2b .esw-map-row span{flex:1;min-width:0;word-break:break-all;}' +
+    '#esw-overlay-9f2b .esw-empty{font-size:11px;color:#8B93A7;}' +
     '#esw-overlay-9f2b .esw-hide{display:none;}';
   dropStyle = addStyle(shadow, CSS);
 
@@ -469,6 +441,7 @@
         '<div class="esw-header-top">' +
           '<span class="esw-dot" data-esw-dot></span>' +
           '<span class="esw-kicker">CURRENT ENV</span>' +
+          '<button class="esw-close" data-esw-gear aria-label="설정" title="설정">&#9881;</button>' +
           '<button class="esw-close" data-esw-close aria-label="닫기">&times;</button>' +
         '</div>' +
         '<span class="esw-current-env" data-esw-env></span>' +
@@ -495,34 +468,37 @@
           '<span class="esw-led esw-led-amber" data-esw-staging-led></span>' +
           '<span class="esw-current-badge" data-esw-staging-badge>현재</span>' +
         '</button>' +
-        '<div class="esw-vm-row">' +
-          '<button class="esw-switch" data-esw-target="vm">' +
-            '<span class="esw-key">V</span>' +
-            '<span class="esw-switch-label">' +
-              '<span class="esw-switch-title">VM</span>' +
-              '<span class="esw-switch-sub" data-esw-vm-label></span>' +
-            '</span>' +
-            '<span class="esw-led esw-led-violet" data-esw-vm-led></span>' +
-            '<span class="esw-current-badge" data-esw-vm-badge>현재</span>' +
-          '</button>' +
-          '<button class="esw-edit-btn" data-esw-vm-edit aria-label="VM 설정 편집" title="VM 서브도메인/포트 편집">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>' +
-          '</button>' +
+        '<button class="esw-switch" data-esw-target="vm">' +
+          '<span class="esw-key">V</span>' +
+          '<span class="esw-switch-label">' +
+            '<span class="esw-switch-title">VM</span>' +
+            '<span class="esw-switch-sub" data-esw-vm-label></span>' +
+          '</span>' +
+          '<span class="esw-led esw-led-violet" data-esw-vm-led></span>' +
+          '<span class="esw-current-badge" data-esw-vm-badge>현재</span>' +
+        '</button>' +
+       '</div>' +
+       '<div class="esw-settings esw-hide" data-esw-settings>' +
+        '<button class="esw-mini-btn esw-wide" data-esw-settings-back>&larr; 돌아가기 (Esc)</button>' +
+        '<div class="esw-section">VM 이동 주소</div>' +
+        '<div class="esw-row">' +
+          '<label class="esw-field"><span>서브도메인</span>' +
+            '<input class="esw-input" type="text" data-esw-vm-sub spellcheck="false" autocomplete="off"></label>' +
+          '<button class="esw-mini-btn" data-esw-vm-domain></button>' +
         '</div>' +
-        '<div class="esw-vm-settings" data-esw-vm-settings>' +
-          '<label class="esw-field">' +
-            '<span>서브도메인</span>' +
-            '<input class="esw-input" type="text" data-esw-vm-sub spellcheck="false" autocomplete="off">' +
-          '</label>' +
-          '<label class="esw-field esw-field-port">' +
-            '<span>포트 (비우면 없음)</span>' +
-            '<input class="esw-input" type="text" inputmode="numeric" data-esw-vm-port spellcheck="false" autocomplete="off">' +
-          '</label>' +
-          '<button class="esw-mini-btn esw-proto-btn" data-esw-vm-proto></button>' +
-          '<button class="esw-mini-btn esw-use-current" data-esw-use-current></button>' +
-          '<button class="esw-mini-btn esw-use-current" data-esw-mark-prod></button>' +
-          '<button class="esw-mini-btn esw-use-current esw-danger" data-esw-reset-host>이 도메인 학습 초기화</button>' +
+        '<div class="esw-row">' +
+          '<label class="esw-field esw-field-port"><span>포트 (↑↓)</span>' +
+            '<input class="esw-input" type="text" inputmode="numeric" data-esw-vm-port spellcheck="false" autocomplete="off"></label>' +
+          '<button class="esw-mini-btn" data-esw-vm-noport></button>' +
+          '<button class="esw-mini-btn" data-esw-vm-proto></button>' +
         '</div>' +
+        '<div class="esw-preview" data-esw-vm-preview></div>' +
+        '<button class="esw-mini-btn esw-wide" data-esw-use-current></button>' +
+        '<div class="esw-section">현재 호스트</div>' +
+        '<button class="esw-mini-btn esw-wide" data-esw-mark-prod></button>' +
+        '<div class="esw-section">Staging 도메인 대응</div>' +
+        '<div class="esw-settings" data-esw-stg-list></div>' +
+        '<button class="esw-mini-btn esw-wide esw-danger" data-esw-reset-all></button>' +
        '</div>' +
       '</div>' +
       '<div class="esw-footer" data-esw-footer></div>' +
@@ -530,20 +506,49 @@
   shadow.appendChild(overlay);
 
   function q(sel) { return overlay.querySelector(sel); }
+  function el(tag, cls, text) {
+    var n = d.createElement(tag);
+    if (cls) { n.className = cls; }
+    if (text !== undefined) { n.textContent = text; }
+    return n;
+  }
   panelEl = q('.esw-panel');
   var envEl = q('[data-esw-env]');
   var dotEl = q('[data-esw-dot]');
   var vmLabel = q('[data-esw-vm-label]');
-  var vmSettings = q('[data-esw-vm-settings]');
-  var vmEditBtn = q('[data-esw-vm-edit]');
+  var mainEl = q('[data-esw-main]');
+  var promptEl = q('[data-esw-prompt]');
+  var settingsEl = q('[data-esw-settings]');
   var vmSubInput = q('[data-esw-vm-sub]');
+  var vmDomainBtn = q('[data-esw-vm-domain]');
   var vmPortInput = q('[data-esw-vm-port]');
+  var vmNoPortBtn = q('[data-esw-vm-noport]');
   var vmProtoBtn = q('[data-esw-vm-proto]');
+  var vmPreview = q('[data-esw-vm-preview]');
   var useCurrentBtn = q('[data-esw-use-current]');
+  var markProdBtn = q('[data-esw-mark-prod]');
+  var stgListEl = q('[data-esw-stg-list]');
+  var resetAllBtn = q('[data-esw-reset-all]');
+  var resetArmed = false;
 
   function setCurrent(name, on) {
     q('[data-esw-' + name + '-led]').classList.toggle('esw-hide', on);
     q('[data-esw-' + name + '-badge]').classList.toggle('esw-show', on);
+  }
+
+  // 세 화면(메인·질문·설정) 중 하나만 보인다
+  function showScreen(name) {
+    promptState = name === 'prompt' ? promptState : null;
+    settingsOpen = name === 'settings';
+    mainEl.classList.toggle('esw-hide', name !== 'main');
+    promptEl.classList.toggle('esw-hide', name !== 'prompt');
+    settingsEl.classList.toggle('esw-hide', name !== 'settings');
+    panelEl.focus();
+  }
+  function showSettings(on) {
+    resetArmed = false;
+    showScreen(on ? 'settings' : 'main');
+    refresh();
   }
 
   // 판정·설정이 바뀔 때마다 화면 전체를 다시 그린다 (버튼은 판정과 무관하게 항상 클릭 가능)
@@ -551,69 +556,82 @@
     isVM = evalIsVM();
     var stagingCur = !!stagingMatch;
     var prodCur = !stagingCur && !isVM;
-    var vmCur = isVM && hostSub === vmConfig.sub && hostDomain === vmConfig.domain &&
-      String(loc.port || '') === String(vmConfig.port);
 
     envEl.textContent = stagingCur ? 'Staging' : (isVM ? 'VM' : 'Production');
     dotEl.className = 'esw-dot ' + (stagingCur ? 'esw-c-amber' : (isVM ? 'esw-c-violet' : 'esw-c-green'));
-    q('[data-esw-host]').textContent = host + (loc.port ? ':' + loc.port : '');
+    q('[data-esw-host]').textContent = host + (hostPort ? ':' + hostPort : '');
 
     var f = peekFamily();
-    var entry = f ? famEntry(f) : null;
-    q('[data-esw-prod-sub]').textContent = f ? (f.sub + '.' + f.domain) : '선택 필요 (처음 한 번)';
+    var ask = '이동할 때 서비스를 물어봅니다';
+    q('[data-esw-prod-sub]').textContent = f ? (f.sub + '.' + f.domain) : ask;
     q('[data-esw-staging-sub]').textContent = stagingMatch ? host :
-      (entry && entry.s ? entry.s + '.' + f.domain : '선택 필요 (처음 한 번)');
+      (!f ? ask : (stgMap[famKey(f)] ? stgMap[famKey(f)] + '.' + f.domain : '선택 필요 (처음 한 번)'));
+    vmLabel.textContent = vmUrl();
     setCurrent('prod', prodCur);
     setCurrent('staging', stagingCur);
-    setCurrent('vm', vmCur);
+    setCurrent('vm', isConfiguredVm());
+    q('[data-esw-footer]').textContent = '경로 유지: ' + (restPath || '/');
 
-    var lv = entry && entry.v;
-    var s = vmConfig.sub || DEFAULT_VM_SUB;
-    vmLabel.textContent = isVM ? (host + (loc.port ? ':' + loc.port : '')) :
-      lv ? (lv.proto + '//' + lv.sub + '.' + f.domain + (lv.port ? ':' + lv.port : '')) :
-      '선택 필요 (기본값: ' + s + (vmConfig.port ? ':' + vmConfig.port : '') + ')';
-    vmProtoBtn.textContent = '프로토콜: ' + (vmConfig.proto === 'http:' ? 'http' : 'https') + ' (클릭하여 전환)';
+    refreshSettings();
+  }
 
-    if (hostSub && !vmCur) {
-      useCurrentBtn.textContent = '현재 호스트(' + hostSub + (loc.port ? ':' + loc.port : '') + ')를 VM으로 지정';
+  function refreshSettings() {
+    // 입력 중인 칸은 덮어쓰지 않는다 (지우고 다시 쓰는 동안 값이 되살아나는 것 방지)
+    if (shadow.activeElement !== vmSubInput) { vmSubInput.value = vmConfig.sub; }
+    if (shadow.activeElement !== vmPortInput) { vmPortInput.value = vmConfig.port || vmPortMemo; }
+    vmPortInput.disabled = !vmConfig.port;
+    vmDomainBtn.textContent = '.' + vmConfig.domain;
+    vmNoPortBtn.textContent = vmConfig.port ? '포트 없애기' : '포트 쓰기';
+    vmProtoBtn.textContent = vmConfig.proto === 'http:' ? 'http' : 'https';
+    vmPreview.textContent = '→ ' + vmUrl() + (restPath || '/');
+
+    if (hostSub && !isConfiguredVm()) {
+      useCurrentBtn.textContent = '현재 호스트(' + hostSub + (hostPort ? ':' + hostPort : '') + ')를 VM 주소로 지정';
       useCurrentBtn.classList.remove('esw-hide');
     } else {
       useCurrentBtn.classList.add('esw-hide');
     }
-    q('[data-esw-footer]').textContent = '경로 유지: ' + (restPath || '/');
+    if (hostSub) {
+      markProdBtn.textContent = learnedProd.indexOf(hostKey) >= 0 ?
+        '이 도메인(' + hostSub + ')의 Production 지정 해제' : '이 도메인(' + hostSub + ')을 Production 으로 지정';
+      markProdBtn.classList.remove('esw-hide');
+    } else {
+      markProdBtn.classList.add('esw-hide');
+    }
 
-    // 판정이 VM 인 호스트를 Production 으로 확정하는 버튼 / 학습 초기화 버튼
-    var markBtn = q('[data-esw-mark-prod]');
-    markBtn.textContent = '이 도메인(' + hostSub + ')은 Production 으로 지정';
-    markBtn.classList.toggle('esw-hide', !(hostSub && isVM));
-    q('[data-esw-reset-host]').classList.toggle('esw-hide', !hasLearnedForHost());
-  }
-
-  function hasLearnedForHost() {
-    if (learnedProd.indexOf(hostKey) >= 0) { return true; }
-    if (stagingMatch) { return !!findFamilyByStaging(hostLabelFull, hostDomain); }
-    return !!learnedMap[hostKey] || !!findFamilyByVm(hostSub, hostDomain);
+    while (stgListEl.firstChild) { stgListEl.removeChild(stgListEl.firstChild); }
+    var keys = Object.keys(stgMap).sort();
+    if (!keys.length) { stgListEl.appendChild(el('div', 'esw-empty', '등록된 대응이 없습니다.')); }
+    keys.forEach(function(k){
+      var row = el('div', 'esw-map-row');
+      row.appendChild(el('span', '', k.slice(0, k.indexOf('.')) + ' → ' + stgMap[k]));
+      var del = el('button', 'esw-mini-btn', '삭제');
+      del.addEventListener('click', function(){
+        delete stgMap[k];
+        saveCfg();
+        refresh();
+      });
+      row.appendChild(del);
+      stgListEl.appendChild(row);
+    });
+    resetAllBtn.textContent = resetArmed ? '정말 초기화? 한 번 더 누르세요' : 'Staging 대응·Production 지정 모두 초기화';
   }
 
   // ───────── 질문 화면 ─────────
   function closePrompt() {
     promptState = null;
-    q('[data-esw-prompt]').classList.add('esw-hide');
-    q('[data-esw-main]').classList.remove('esw-hide');
-    panelEl.focus();
+    showScreen('main');
   }
 
   function chooseFromPrompt(value) {
     var v = String(value || '').toLowerCase().replace(/[^a-z0-9-]/g, '');
     if (!v || !promptState) { return; }
     var st = promptState;
-    var portInput = q('[data-esw-prompt] [data-esw-prompt-port]');
-    var port = portInput ? portInput.value.replace(/[^0-9]/g, '').slice(0, 5) : '';
     closePrompt();
-    st.onChoose(v, port);
+    st.onChoose(v);
   }
 
-  // opt: { title, hint, cands[], onChoose(value, port), showPort, port }
+  // opt: { title, hint, cands[], onChoose(value) }
   function openPrompt(opt) {
     var seen = {};
     opt.cands = opt.cands.filter(function(c){
@@ -622,28 +640,10 @@
       return true;
     });
     promptState = opt;
-    var box = q('[data-esw-prompt]');
+    var box = promptEl;
     while (box.firstChild) { box.removeChild(box.firstChild); }
-    function el(tag, cls, text) {
-      var n = d.createElement(tag);
-      if (cls) { n.className = cls; }
-      if (text !== undefined) { n.textContent = text; }
-      return n;
-    }
     box.appendChild(el('div', 'esw-prompt-title', opt.title));
     box.appendChild(el('div', 'esw-prompt-hint', opt.hint + ' (숫자키 선택 · Esc 취소)'));
-    if (opt.showPort) {
-      var pf = el('label', 'esw-field');
-      pf.appendChild(el('span', '', '포트 (비우면 없음)'));
-      var pi = el('input', 'esw-input');
-      pi.type = 'text';
-      pi.setAttribute('inputmode', 'numeric');
-      pi.setAttribute('data-esw-prompt-port', '');
-      pi.value = opt.port || '';
-      pi.addEventListener('input', function(){ pi.value = pi.value.replace(/[^0-9]/g, '').slice(0, 5); });
-      pf.appendChild(pi);
-      box.appendChild(pf);
-    }
     opt.cands.forEach(function(c, idx){
       var b = el('button', 'esw-switch');
       b.appendChild(el('span', 'esw-key', String(idx + 1)));
@@ -671,16 +671,14 @@
     cancel.addEventListener('click', closePrompt);
     box.appendChild(cancel);
 
-    q('[data-esw-main]').classList.add('esw-hide');
-    box.classList.remove('esw-hide');
-    panelEl.focus();
+    showScreen('prompt');
   }
 
-  vmSubInput.value = vmConfig.sub;
-  vmPortInput.value = vmConfig.port;
   refresh();
 
   overlay.querySelector('[data-esw-close]').addEventListener('click', closeModal);
+  q('[data-esw-gear]').addEventListener('click', function(){ if (!promptState) { showSettings(!settingsOpen); } });
+  q('[data-esw-settings-back]').addEventListener('click', function(){ showSettings(false); });
   var btns = overlay.querySelectorAll('[data-esw-target]');
   for (var i = 0; i < btns.length; i++) {
     btns[i].addEventListener('click', function(){ pick(this.getAttribute('data-esw-target')); });
@@ -693,99 +691,88 @@
     if (e.target === overlay && downOnBackdrop) closeModal();
   });
 
-  vmEditBtn.addEventListener('click', function(e){
-    e.stopPropagation();
-    var isOpen = vmSettings.classList.toggle('esw-open');
-    vmEditBtn.classList.toggle('esw-active', isOpen);
-    if (isOpen) { vmSubInput.focus(); }
-  });
+  // ───────── 설정 화면 동작 ─────────
+  // VM 이동은 vmConfig 한 곳만 읽으므로, 모든 입력은 vmConfig 만 바꾸고 저장·재렌더하면 된다.
+  function commitVm() { saveCfg(); refresh(); }
 
   vmSubInput.addEventListener('input', function(){
     var cleaned = vmSubInput.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
     if (cleaned !== vmSubInput.value) { vmSubInput.value = cleaned; }
     if (!cleaned) { return; }  // 비어 있는 동안은 저장하지 않는다 (blur 때 직전 값으로 복원)
     vmConfig.sub = cleaned;
-    saveCfg();
-    refresh();
+    commitVm();
   });
-  vmSubInput.addEventListener('blur', function(){
-    if (!vmSubInput.value) { vmSubInput.value = vmConfig.sub; }
+  vmSubInput.addEventListener('blur', function(){ vmSubInput.value = vmConfig.sub; refreshSettings(); });
+
+  vmDomainBtn.addEventListener('click', function(){
+    vmConfig.domain = DOMAINS[(DOMAINS.indexOf(vmConfig.domain) + 1) % DOMAINS.length];
+    commitVm();
   });
 
+  function setPort(p) {
+    vmConfig.port = p;
+    vmPortMemo = p;
+    commitVm();
+  }
   vmPortInput.addEventListener('input', function(){
     var cleaned = vmPortInput.value.replace(/[^0-9]/g, '').slice(0, 5);
     if (cleaned !== vmPortInput.value) { vmPortInput.value = cleaned; }
-    vmConfig.port = cleaned;  // 빈 값 = 포트 없음 (레거시 VM)
-    saveCfg();
-    refresh();
+    if (cleaned) { setPort(cleaned); }  // 비어 있는 동안은 저장하지 않는다 (포트 없음은 별도 버튼)
+  });
+  vmPortInput.addEventListener('blur', function(){ vmPortInput.value = vmConfig.port || vmPortMemo; });
+  vmPortInput.addEventListener('keydown', function(e){
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      var current = parseInt(vmPortInput.value, 10);
+      if (isNaN(current)) { current = parseInt(DEFAULT_VM_PORT, 10); }
+      var next = Math.max(0, Math.min(65535, current + (e.key === 'ArrowUp' ? 1 : -1)));
+      vmPortInput.value = String(next);
+      setPort(String(next));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      vmPortInput.blur();
+    }
+  });
+  vmSubInput.addEventListener('keydown', function(e){
+    if (e.key === 'Enter') { e.preventDefault(); vmSubInput.blur(); }
+  });
+
+  vmNoPortBtn.addEventListener('click', function(){
+    if (vmConfig.port) { vmPortMemo = vmConfig.port; vmConfig.port = ''; } else { vmConfig.port = vmPortMemo || DEFAULT_VM_PORT; }
+    commitVm();
   });
 
   vmProtoBtn.addEventListener('click', function(){
     vmConfig.proto = (vmConfig.proto === 'http:') ? 'https:' : 'http:';
-    var pf = peekFamily(), pe = pf ? famEntry(pf) : null;
-    if (pe && pe.v) { pe.v.proto = vmConfig.proto; }  // 학습된 VM 항목에도 반영해야 이동에 쓰인다
-    saveCfg();
-    refresh();
-  });
-
-  function onVmInputEnter(e) {
-    if (e.key !== 'Enter') { return; }
-    e.preventDefault();
-    pick('vm');
-  }
-  vmSubInput.addEventListener('keydown', onVmInputEnter);
-
-  function onVmPortKeydown(e) {
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      var delta = (e.key === 'ArrowUp') ? 1 : -1;
-      var current = parseInt(vmPortInput.value, 10);
-      if (isNaN(current)) { current = parseInt(DEFAULT_VM_PORT, 10); }
-      var next = current + delta;
-      if (next < 0) { next = 0; }
-      if (next > 65535) { next = 65535; }
-      vmPortInput.value = String(next);
-      vmConfig.port = String(next);
-      saveCfg();
-      refresh();
-      return;
-    }
-    onVmInputEnter(e);
-  }
-  vmPortInput.addEventListener('keydown', onVmPortKeydown);
-
-  q('[data-esw-mark-prod]').addEventListener('click', function(){
-    if (learnedProd.indexOf(hostKey) < 0) { learnedProd.push(hostKey); }
-    saveCfg();
-    refresh();
-    showToast(hostKey + ' 을(를) Production 으로 지정했습니다.');
-  });
-
-  q('[data-esw-reset-host]').addEventListener('click', function(){
-    var fam = stagingMatch ? findFamilyByStaging(hostLabelFull, hostDomain) : null;
-    var vfam = (!stagingMatch && hostSub) ? findFamilyByVm(hostSub, hostDomain) : null;
-    learnedProd = learnedProd.filter(function(k){ return k !== hostKey; });
-    if (fam && learnedMap[famKey(fam)]) { delete learnedMap[famKey(fam)].s; }
-    if (vfam && learnedMap[famKey(vfam)]) { delete learnedMap[famKey(vfam)].v; }
-    if (hostKey) { delete learnedMap[hostKey]; }
-    Object.keys(learnedMap).forEach(function(k){
-      if (!learnedMap[k].s && !learnedMap[k].v) { delete learnedMap[k]; }
-    });
-    saveCfg();
-    refresh();
-    showToast('이 도메인의 학습 내용을 초기화했습니다.\n(페이지를 새로고침하면 규칙으로 다시 판정됩니다)');
+    commitVm();
   });
 
   useCurrentBtn.addEventListener('click', function(){
     vmConfig.sub = hostSub;
     vmConfig.domain = hostDomain;
-    vmConfig.port = String(loc.port || '');
+    vmConfig.port = hostPort;
+    if (hostPort) { vmPortMemo = hostPort; }
     vmConfig.proto = loc.protocol === 'http:' ? 'http:' : 'https:';
+    commitVm();
+    showToast('VM 주소를 ' + vmUrl() + ' 로 지정했습니다.');
+  });
+
+  markProdBtn.addEventListener('click', function(){
+    var idx = learnedProd.indexOf(hostKey);
+    if (idx >= 0) { learnedProd.splice(idx, 1); } else { learnedProd.push(hostKey); }
     saveCfg();
-    vmSubInput.value = vmConfig.sub;
-    vmPortInput.value = vmConfig.port;
     refresh();
-    showToast('VM 을 ' + vmLabel.textContent + ' 로 지정했습니다.');
+    showToast(hostKey + (idx >= 0 ? ' 의 Production 지정을 해제했습니다.' : ' 을(를) Production 으로 지정했습니다.'));
+  });
+
+  resetAllBtn.addEventListener('click', function(){
+    if (!resetArmed) { resetArmed = true; refreshSettings(); return; }
+    resetArmed = false;
+    stgMap = {};
+    learnedProd = [];
+    saveCfg();
+    refresh();
+    showToast('Staging 대응과 Production 지정을 초기화했습니다.');
   });
 
   // 호스트 페이지의 document 레벨 핸들러(단축키, 바깥 클릭 닫기, Bootstrap/jQuery UI 포커스 트랩 등)가
