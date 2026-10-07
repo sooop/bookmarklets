@@ -570,7 +570,7 @@
     var lv = entry && entry.v;
     var s = vmConfig.sub || DEFAULT_VM_SUB;
     vmLabel.textContent = isVM ? (host + (loc.port ? ':' + loc.port : '')) :
-      lv ? ((lv.proto === 'http:' ? 'http://' : '') + lv.sub + '.' + f.domain + (lv.port ? ':' + lv.port : '')) :
+      lv ? (lv.proto + '//' + lv.sub + '.' + f.domain + (lv.port ? ':' + lv.port : '')) :
       '선택 필요 (기본값: ' + s + (vmConfig.port ? ':' + vmConfig.port : '') + ')';
     vmProtoBtn.textContent = '프로토콜: ' + (vmConfig.proto === 'http:' ? 'http' : 'https') + ' (클릭하여 전환)';
 
@@ -722,6 +722,8 @@
 
   vmProtoBtn.addEventListener('click', function(){
     vmConfig.proto = (vmConfig.proto === 'http:') ? 'https:' : 'http:';
+    var pf = peekFamily(), pe = pf ? famEntry(pf) : null;
+    if (pe && pe.v) { pe.v.proto = vmConfig.proto; }  // 학습된 VM 항목에도 반영해야 이동에 쓰인다
     saveCfg();
     refresh();
   });
