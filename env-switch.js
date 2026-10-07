@@ -255,6 +255,7 @@
   var restPath = loc.pathname + loc.search + loc.hash;
 
   function navigateTo(proto, targetHost, targetPort) {
+    proto = (proto === 'http:' || proto === 'http') ? 'http:' : 'https:';
     var portPart = targetPort ? (':' + targetPort) : '';
     location.href = proto + '//' + targetHost + portPart + restPath;
   }
@@ -275,6 +276,9 @@
     window.removeEventListener('keydown', onKeydown, true);
     if (window.__eswCleanup === closeModal) { window.__eswCleanup = null; }
   }
+
+  // Production/Staging 이동 시 현재 프로토콜 유지 (VM 에서 나갈 때는 https)
+  function keepProto() { return (!isVM && loc.protocol === 'http:') ? 'http:' : 'https:'; }
 
   function go(proto, label, domain, port) {
     navigateTo(proto, label + '.' + domain, port);
@@ -309,7 +313,7 @@
       onChoose: function(label) {
         ensureEntry(f).s = label;
         saveCfg();
-        go('https:', label, f.domain, '');
+        go(keepProto(), label, f.domain, '');
       }
     });
   }
@@ -343,9 +347,9 @@
     withFamily(function(f) {
       var entry = famEntry(f);
       if (target === 'production') {
-        go('https:', f.sub, f.domain, '');
+        go(keepProto(), f.sub, f.domain, '');
       } else if (target === 'staging') {
-        if (entry && entry.s) { go('https:', entry.s, f.domain, ''); } else { askStaging(f); }
+        if (entry && entry.s) { go(keepProto(), entry.s, f.domain, ''); } else { askStaging(f); }
       } else if (target === 'vm') {
         if (entry && entry.v) { go(entry.v.proto, entry.v.sub, f.domain, entry.v.port); } else { askVm(f); }
       }
