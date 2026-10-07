@@ -1,7 +1,7 @@
 /*
  * MULTILANG FILL — 다국어 관리 화면의 언어별 입력칸 일괄 입력/저장
  *
- * 대상: admin / staging-admin .tracxlogis.com 의 Multilang/ 아래 두 화면 (경로로 동작 분기)
+ * 대상: admin.tracxlogis.com / staging-admin.tracxlogis.com 의 Multilang/ 아래 두 화면 (경로로 동작 분기)
  *  - ResourceManagement.aspx : 저장 = regTextResource(idx, work_no) 언어별 순차 호출
  *  - TranslateMng.aspx       : 저장 = Save All과 동일하게 변경된 언어만 btnSave_onClick(lang, true, false) 후 목록 갱신
  * 사용: 그리드에서 리소스를 선택(res_no / no 채워짐) → 북마클릿 실행 → 번역 데이터 붙여넣기
@@ -39,10 +39,10 @@
   }
 
   // ── 도메인 가드 ──
-  var ROUTE = /ResourceManagement\.aspx/i.test(location.pathname) ? 'rm' :
-              (/TranslateMng\.aspx/i.test(location.pathname) ? 'tm' : null);
-  if (!/(^|\.)tracxlogis\.com$/.test(location.hostname) || !ROUTE) {
-    showToast('다국어 리소스 관리(ResourceManagement.aspx) 또는 Task 관리(TranslateMng.aspx) 화면에서만 사용할 수 있습니다.');
+  var ROUTE = /\/Multilang\/ResourceManagement\.aspx$/i.test(location.pathname) ? 'rm' :
+              (/\/Multilang\/TranslateMng\.aspx$/i.test(location.pathname) ? 'tm' : null);
+  if (!/^(staging-)?admin\.tracxlogis\.com$/.test(location.hostname) || !ROUTE) {
+    showToast('admin / staging-admin 의 다국어 리소스 관리(ResourceManagement.aspx)\n또는 Task 관리(TranslateMng.aspx) 화면에서만 사용할 수 있습니다.');
     return;
   }
 
