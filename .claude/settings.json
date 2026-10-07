@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit *)",
+            "command": "cp -f \"$CLAUDE_PROJECT_DIR/installer.html\" /c/apps/bin/installer.html && [ \"$(wc -c < \"$CLAUDE_PROJECT_DIR/installer.html\")\" = \"$(wc -c < /c/apps/bin/installer.html)\" ] && fd -q -g installer.html /c/apps/bin && echo '{\"systemMessage\":\"installer.html → c:/apps/bin/installer.html 복사 완료\"}' || echo '{\"systemMessage\":\"installer.html 복사 실패 (c:/apps/bin)\"}'",
+            "timeout": 15,
+            "statusMessage": "installer.html 복사 중..."
+          }
+        ]
+      }
+    ]
+  }
+}
