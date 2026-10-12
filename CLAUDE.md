@@ -51,14 +51,14 @@ raw.githubusercontent.com은 즉시 반영되고, jsDelivr는 CDN 캐시 지연�
   뮤트 `#8B93A7`, 상태색 green `#34D399` / amber `#FBBF24` / violet `#A78BFA`.
 - **alert/confirm 지양** (admin-grid-export.js의 도메인 가드만 예외). 토스트로 알립니다.
 - **설정 영속화**는 `localStorage`에 도구별 키로 저장하고 `try/catch`로 감쌉니다
-  (`__esw_vm_config__`, `esw_installer_v2` 등).
+  (`__esw_cfg2__`, `esw_installer_v2` 등).
 
 ## 각 도구의 역할
 
 | 파일 | 하는 일 |
 |---|---|
 | `installer.html` | 로더 북마클릿 생성기. 다른 도구를 설치하는 진입점. localStorage에 입력값 유지 |
-| `env-switch.js` | 현재 호스트명에서 서브도메인을 파싱해 Production / `staging-*` / VM 사이를 경로 유지한 채 전환. P/S/V 단축키, ⚙ 설정 화면. VM 이동 주소(서브도메인·도메인·포트 유무·프로토콜)는 설정 화면의 단일 값(`vmConfig`)만 사용. VM 에서 나갈 때는 경로를 보여 주며 서비스를 매번 묻고 기억하지 않음. Staging 도메인 대응(`stg`)과 Production 지정(`prod`)만 `Domain=.<도메인>` 쿠키(+localStorage 폴백)에 저장. Shadow DOM 오버레이 |
+| `env-switch.js` | 현재 호스트명에서 서브도메인을 파싱해 Production / `staging-*` / VM 사이를 경로 유지한 채 전환. P/S/V 단축키, ⚙ 설정 화면. VM 은 '최근 VM'(도메인×포트, 최대 8개·★ 고정) 목록 클릭/숫자키 또는 입력칸(서브[:포트]·전체 주소·`:포트`, ↑↓ 로 포트 ±1)으로 이동. VM 에서 Production/Staging 으로 나갈 때는 경로 규칙(첫 세그먼트, 충돌 시 두 세그먼트)으로 서비스 후보를 제시하고 선택을 학습. 모든 설정(`r`·`t`·`g`·`p`)은 `__esw_cfg2__` 하나에 `Domain=.<도메인>` 쿠키+localStorage 로 저장하며 갱신 시각이 최신인 쪽을 읽음(이전 `__esw_cfg__` 데이터는 폐기·삭제). 접속 실패 화면·외부 페이지에서도 실행되며 실패 주소를 알아내면 그 경로를 사용(이 화면에서는 저장소 읽기 불가). Shadow DOM 오버레이 |
 | `qr-code.js` | 현재 URL을 QR로 표시. URL 길이에 따라 QR 픽셀 크기를 단계적으로 키움. 외부 API `api.qrserver.com` 의존 |
 | `admin-grid-export.js` | **DHTMLX** 그리드 추출기. `window`를 순회해 `getColumnCount`/`cells`/`getRowsNum`/`getRowId`를 가진 객체를 찾음. 화면에서 직접 그리드를 클릭해 고르는 오버레이 제공. admin/qlps/tlsp/qwms 서브도메인 전용 |
 | `slick-grid-export.js` | **SlickGrid** 추출기. `window.SlickGridFactory`를 iframe 3단계까지 재귀 탐색. 컬럼 formatter를 적용해 렌더된 값을 추출 |
