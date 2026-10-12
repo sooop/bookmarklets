@@ -183,6 +183,16 @@
   .setup-status.warn{ color: var(--amber); }
   .setup-status.ok{ color: var(--green); }
 
+  .purge-link{
+    display: block;
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--violet);
+    word-break: break-all;
+    text-decoration: none;
+  }
+  .purge-link:hover{ text-decoration: underline; }
+
   .preview-note-text{
     margin: 0 0 12px 0;
     font-size: 12px;
@@ -359,6 +369,7 @@
         </div>
         <div class="preview-url" id="preview-url">—</div>
         <div class="preview-note" id="preview-note"></div>
+        <a class="purge-link" id="purge-link" href="#" target="_blank" rel="noopener" style="display:none"></a>
       </div>
     </div>
   </section>
@@ -439,6 +450,7 @@
     cacheTypeSeg: document.getElementById('cache-type-seg'),
     previewUrl: document.getElementById('preview-url'),
     previewNote: document.getElementById('preview-note'),
+    purgeLink: document.getElementById('purge-link'),
     previewCopyBtn: document.getElementById('preview-copy-btn'),
     previewRunBtn: document.getElementById('preview-run-btn'),
     previewRunStatus: document.getElementById('preview-run-status'),
@@ -551,6 +563,7 @@
     if (!baseUrl) {
       els.previewUrl.textContent = '—';
       els.previewNote.textContent = '';
+      els.purgeLink.style.display = 'none';
       els.link.setAttribute('href', '#');
       els.link.setAttribute('draggable', 'false');
       els.link.classList.add('relay-disabled');
@@ -567,7 +580,16 @@
       ? '실행할 때마다 &t=<현재시각> 이 자동으로 덧붙습니다.'
       : '';
 
-    var href = buildLoaderHref(baseUrl, state.cacheType === 'timestamp');
+    if (state.urlType === 'jsdelivr') {
+      var purgeUrl = baseUrl.split('?')[0].replace('://cdn.jsdelivr.net/', '://purge.jsdelivr.net/');
+      els.purgeLink.textContent = 'jsDelivr 캐시 퍼지: ' + purgeUrl;
+      els.purgeLink.setAttribute('href', purgeUrl);
+      els.purgeLink.style.display = 'block';
+    } else {
+      els.purgeLink.style.display = 'none';
+    }
+
+    var href = buildLoaderHref(baseUrl,state.cacheType === 'timestamp');
     els.link.setAttribute('href', href);
     els.link.setAttribute('draggable', 'true');
     els.link.classList.remove('relay-disabled');
