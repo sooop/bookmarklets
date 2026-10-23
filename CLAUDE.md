@@ -39,7 +39,7 @@ raw.githubusercontent.com은 즉시 반영되고, jsDelivr는 CDN 캐시 지연�
 - **즉시실행 IIFE**, ES5 문법. `var`, 문자열 연결, `function` 표현식을 씁니다. 트랜스파일 단계가 없습니다.
 - **재실행 안전성**: 시작하자마자 자신의 오버레이 DOM을 `getElementById(...)` → `remove()`로 제거합니다.
 - **고유 ID 접미사**: 도구마다 충돌 방지용 해시 접미사를 씁니다 — `esw-*-9f2b`(env-switch),
-  `qrb-*-8e4a`(qr-code), `__gep*`/`gep-*`(admin-grid-export), `__gxp*`/`gxp-*`(slick-grid-export).
+  `qrb-*-8e4a`(qr-code), `__gep*`/`gep-*`(admin-grid-export), `__gxp*`/`gxp-*`(slick-grid-export), `tcv-*-7c1d`(table-converter).
   새 도구는 새 접미사를 정합니다.
 - **CSS 격리**: `<style>`을 주입하되 셀렉터를 전부 오버레이 루트 ID로 한정하거나(`#esw-overlay-9f2b .foo`),
   루트에 `all:initial`을 겁니다(`.gxp-root`, `#__gepRoot`). 임의의 호스트 페이지 위에 얹히기 때문입니다.
@@ -62,6 +62,7 @@ raw.githubusercontent.com은 즉시 반영되고, jsDelivr는 CDN 캐시 지연�
 | `qr-code.js` | 현재 URL을 QR로 표시. URL 길이에 따라 QR 픽셀 크기를 단계적으로 키움. 외부 API `api.qrserver.com` 의존 |
 | `admin-grid-export.js` | **DHTMLX** 그리드 추출기. `window`를 순회해 `getColumnCount`/`cells`/`getRowsNum`/`getRowId`를 가진 객체를 찾음. 화면에서 직접 그리드를 클릭해 고르는 오버레이 제공. admin/qlps/tlsp/qwms 서브도메인 전용 |
 | `slick-grid-export.js` | **SlickGrid** 추출기. `window.SlickGridFactory`를 iframe 3단계까지 재귀 탐색. 컬럼 formatter를 적용해 렌더된 값을 추출 |
+| `table-converter.js` | **표 ↔ 목록 변환기**. CSV·TSV·HTML 표·GFM 표·ASCII 선 표 ↔ JSON·마크다운 목록 양방향 변환(규칙 기반). 표/원문 보기, 셀 직접 수정, 클립보드·파일(.tsv/.csv) 내보내기. "페이지에서 표 선택"으로 호스트 페이지의 `<table>`을 클릭해 가져옴(↑ 키로 바깥 표). 도메인 가드 없음. Shadow DOM 오버레이 |
 
 두 그리드 추출기는 서로 다른 그리드 라이브러리를 대상으로 하며 코드를 공유하지 않습니다.
 
